@@ -11,9 +11,6 @@ contract ExchangeRateData is Ownable {
     uint256 constant private RET_ILLEGAL_INPUT = 500001;
     uint256 constant private RET_NO_PERMISSION = 500002;
 
-    // Base rate when denominator is 1, which means the precision can be up to 1/RATE_BASE
-    uint256 constant public RATE_BASE = 100000;
-
     // Event
     event setExchangeRateLog(uint256 retCode, address account, bytes32 pair);
 
@@ -21,10 +18,10 @@ contract ExchangeRateData is Ownable {
         // The asset pair, separated by "/", e.g. usd/hkd, btc/usdt, bac001/bac002
         // Pair is the key index hence is unique
         bytes32 pair;
-        // Rates Numerator in uint256 manner。 Can store multiple values。
-        uint256[] rateN;
-        // Rates Denominator in uint256 manner. If this is 1, then the numerator will be of default base value
-        uint256[] rateD;
+        // Rate in uint256 manner。 Can store multiple values。
+        uint256[] rate;
+        // Rates Denominator in uint256 manner. This MUST be a 10**decimal number.
+        uint256 base;
         // The exact timestamp 
         uint256 timestamp;
         // Extra values
@@ -38,8 +35,8 @@ contract ExchangeRateData is Ownable {
     // set
     function setExchangeRate(
         bytes32 pairval,
-        uint256[] memory rateNval,
-        uint256[] memory rateDval,
+        uint256[] memory rateval,
+        uint256 baseval,
         uint256 timestampval,
         bytes32[] memory extraval
     )
@@ -49,7 +46,12 @@ contract ExchangeRateData is Ownable {
     {
         // Permission check
         // Param validity check
-        if (pairval == bytes32(0) || timestampval == uint256(0)) {
+        if (pairval == bytes32(0) || timestampval == uint256(0) || baseval == uint256(0)) {
+            emit setExchangeRateLog(RET_ILLEGAL_INPUT, tx.origin, pairval);
+            return RET_ILLEGAL_INPUT;
+        }
+        // base must be 10-based decimal
+        if (baseval % 10 > 0) {
             emit setExchangeRateLog(RET_ILLEGAL_INPUT, tx.origin, pairval);
             return RET_ILLEGAL_INPUT;
         }
@@ -58,7 +60,7 @@ contract ExchangeRateData is Ownable {
             // a new rate pair, record it
             exchangeRatePairs.push(pairval);
         }
-        ExchangeRate memory exchangeRate = ExchangeRate(pairval, rateNval, rateDval, timestampval, extraval);
+        ExchangeRate memory exchangeRate = ExchangeRate(pairval, rateval, baseval, timestampval, extraval);
         exchangeRates[pairval] = exchangeRate;
         emit setExchangeRateLog(RET_SUCCESS, tx.origin, pairval);
         return RET_SUCCESS;
@@ -68,8 +70,8 @@ contract ExchangeRateData is Ownable {
     function getExchangeRate(bytes32 pairval)
         public
         view
-        returns (bytes32, uint256[], uint256[], uint256, bytes32[])
+        returns (bytes32, uint256[], uint256, uint256, bytes32[])
     {
-        return (pairval, exchangeRates[pairval].rateN, exchangeRates[pairval].rateD, exchangeRates[pairval].timestamp, exchangeRates[pairval].extra);
+        return (pairval, exchangeRates[pairval].rate, exchangeRates[pairval].base, exchangeRates[pairval].timestamp, exchangeRates[pairval].extra);
     }
 }
